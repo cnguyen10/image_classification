@@ -70,7 +70,7 @@ def train(
     # set train mode
     optimizer.model.train()
 
-    for samples in tqdm(
+    for _ in tqdm(
         iterable=range(cfg.dataset.length.train // cfg.training.batch_size),
         desc='train',
         ncols=80,
