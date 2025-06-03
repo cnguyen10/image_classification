@@ -248,6 +248,7 @@ def main(cfg: DictConfig) -> None:
                 resize=cfg.hparams.resize,
                 mean=cfg.hparams.mean,
                 std=cfg.hparams.std,
+                p_hflip=cfg.hparams.prob_random_h_flip,
                 num_workers=cfg.data_loading.num_workers,
                 num_threads=cfg.data_loading.num_threads,
                 prefetch_size=cfg.data_loading.prefetch_size

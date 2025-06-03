@@ -39,8 +39,8 @@ training:
   weight_decay: 0.0005
 
 hparams:
-  resize: [36, 36]
-  crop_size: [32, 32]
+  resize: null
+  crop_size: null
   prob_random_h_flip: 0.5
   mean: null
   std: null
