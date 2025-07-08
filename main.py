@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import random
+from functools import partial
 
 from tqdm import tqdm
 
@@ -97,7 +98,9 @@ def train(
 def evaluate(
     data_loader: grain.DataLoader,
     optimizer: nnx.Optimizer,
-    cfg: DictConfig
+    num_samples: int,
+    batch_size: int,
+    progress_bar_flag: bool
 ) -> float:
     """
     """
@@ -110,12 +113,12 @@ def evaluate(
     for samples in tqdm(
         iterable=data_loader,
         desc='eval',
-        total=cfg.dataset.length.test // cfg.training.batch_size,
+        total=num_samples // batch_size + 1,
         ncols=80,
         leave=False,
         position=2,
         colour='blue',
-        disable=not cfg.data_loading.progress_bar
+        disable=not progress_bar_flag
     ):
         x = jnp.array(object=samples['image'], dtype=jnp.float32)
         y = jnp.array(object=samples['label'], dtype=jnp.int32)
@@ -168,6 +171,7 @@ def main(cfg: DictConfig) -> None:
     model = hydra.utils.instantiate(config=cfg.model)(
         num_classes=cfg.dataset.num_classes,
         rngs=nnx.Rngs(jax.random.PRNGKey(seed=random.randint(a=0, b=100))),
+        dropout_rate=cfg.training.dropout_rate,
         dtype=eval(cfg.jax.dtype)
     )
 
@@ -255,14 +259,14 @@ def main(cfg: DictConfig) -> None:
             )
             dataloader_train = iter(dataloader_train)
 
-            dataloader_test = initialize_dataloader(
-                data_source=source_test,
+            data_loader_test_fn = partial(
+                initialize_dataloader,
                 num_epochs=1,
                 shuffle=False,
-                seed=random.randint(a=0, b=10_000),
+                seed=0,
                 batch_size=cfg.training.batch_size,
-                crop_size=cfg.hparams.crop_size,
-                resize=cfg.hparams.resize,
+                crop_size=None,
+                resize=cfg.hparams.crop_size,
                 mean=cfg.hparams.mean,
                 std=cfg.hparams.std,
                 p_flip=None,
@@ -271,6 +275,8 @@ def main(cfg: DictConfig) -> None:
                 num_threads=cfg.data_loading.num_threads,
                 prefetch_size=cfg.data_loading.prefetch_size
             )
+            dataloader_test = data_loader_test_fn(source_test)
+            dataloader_train_1 = data_loader_test_fn(source_train)
 
             for epoch_id in tqdm(
                 iterable=range(start_epoch_id, cfg.training.num_epochs, 1),
@@ -296,14 +302,24 @@ def main(cfg: DictConfig) -> None:
                     args=ocp.args.StandardSave(nnx.state(state.model))
                 )
 
+                accuracy_train = evaluate(
+                    data_loader=dataloader_train_1,
+                    optimizer=state,
+                    num_samples=cfg.dataset.length.train,
+                    batch_size=cfg.training.batch_size,
+                    progress_bar_flag=cfg.data_loading.progress_bar
+                )
+
                 accuracy = evaluate(
                     data_loader=dataloader_test,
                     optimizer=state,
-                    cfg=cfg
+                    num_samples=cfg.dataset.length.test,
+                    batch_size=cfg.training.batch_size,
+                    progress_bar_flag=cfg.data_loading.progress_bar
                 )
 
                 mlflow.log_metrics(
-                    metrics={'loss': loss, 'accuracy': accuracy},
+                    metrics={'loss': loss, 'accuracy/test': accuracy, 'accuracy/train': accuracy_train},
                     step=epoch_id + 1,
                     synchronous=False
                 )

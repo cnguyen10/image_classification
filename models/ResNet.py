@@ -216,6 +216,7 @@ class ResNet(nnx.Module):
     def __init__(
             self,
             rngs: nnx.Rngs,
+            dropout_rate: float,
             block: PreActBlock | PreActBottleneck,
             num_blocks: Sequence[int],
             in_planes: int = 64,
@@ -237,6 +238,7 @@ class ResNet(nnx.Module):
 
         planes = [64, 128, 256, 512]
         self.layers = [None] * len(num_blocks)
+        self.dropouts = [None] * len(self.layers)
         for i in range(len(num_blocks)):
             in_planes, self.layers[i] = make_layer(
                 rngs=rngs,
@@ -247,6 +249,7 @@ class ResNet(nnx.Module):
                 stride=min(i + 1, 2),
                 dtype=dtype
             )
+            self.dropouts[i] = nnx.Dropout(rate=dropout_rate, rngs=rngs)
 
         if num_classes is None:
             self.clf = lambda x: x
@@ -266,6 +269,7 @@ class ResNet(nnx.Module):
 
         for i in range(len(self.layers)):
             out = self.layers[i](out)
+            out = self.dropouts[i](out)
 
         out = jnp.mean(a=out, axis=(1, 2))
 
@@ -274,9 +278,10 @@ class ResNet(nnx.Module):
         return out
 
 
-def ResNet18(num_classes: int, rngs: nnx.Rngs, dtype: jnp.dtype = jnp.float32) -> ResNet:
+def ResNet18(num_classes: int, rngs: nnx.Rngs, dropout_rate: float, dtype: jnp.dtype = jnp.float32) -> ResNet:
     return ResNet(
         rngs=rngs,
+        dropout_rate=dropout_rate,
         block=PreActBlock,
         num_blocks=(2, 2, 2, 2),
         num_classes=num_classes,
