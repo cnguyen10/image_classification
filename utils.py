@@ -7,6 +7,7 @@ import grain.python as grain
 from transformations import (
     RandomCrop,
     Resize,
+    CropAndPad,
     RandomHorizontalFlip,
     RandomVerticalFlip,
     ToRGB,
@@ -61,6 +62,7 @@ def initialize_dataloader(
     seed: int,
     batch_size: int,
     crop_size: tuple[int, int] = None,
+    padding_px: int | list[int] = None,
     resize: tuple[int, int] = None,
     mean: float = None,
     std: float = None,
@@ -84,13 +86,16 @@ def initialize_dataloader(
 
     if resize is not None:
         transformations.append(Resize(resize_shape=resize))
+    
+    if padding_px is not None:
+        transformations.append(CropAndPad(px=padding_px))
 
     if crop_size is not None:
         transformations.append(RandomCrop(crop_size=crop_size))
 
     if p_flip is not None:
         transformations.append(RandomHorizontalFlip(p=p_flip))
-        transformations.append(RandomVerticalFlip(p=p_flip))
+        # transformations.append(RandomVerticalFlip(p=p_flip))
 
     if not is_color_img:
         transformations.append(ToRGB())
