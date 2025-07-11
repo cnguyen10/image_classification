@@ -32,20 +32,21 @@ data_loading:
   progress_bar: True
 
 training:
-  lr: 0.1
+  lr: 0.01
   batch_size: 128
-  num_epochs: 100
+  num_epochs: 300
   momentum: 0.9
   weight_decay: 0.0005
-  dropout_rate: 0.5
+  dropout_rate: 0.1
+  clipped_norm: 10
+  eval_every_n_epochs: 10
 
 hparams:
-  resize: [36, 36]
-  crop_size: [32, 32]
+  resize: null
+  crop_size: null
   prob_random_flip: 0.5
   mean: null
   std: null
-  clipped_norm: null
 
 jax:
   platform: cuda

@@ -22,7 +22,8 @@ def init_tx(
     num_epochs: int,
     weight_decay: float,
     momentum: float,
-    clipped_norm: float
+    clipped_norm: float,
+    key: jax.random.PRNGKey
 ) -> optax.GradientTransformationExtraArgs:
     """initialize parameters of an optimizer
     """
@@ -46,6 +47,7 @@ def init_tx(
         l2_regularization,
         optax.clip_by_global_norm(max_norm=clipped_norm) \
             if clipped_norm is not None else optax.identity(),
+        optax.add_noise(eta=0.01, gamma=0.55, key=key),
         optax.sgd(learning_rate=lr_schedule_fn, momentum=momentum)
     )
 

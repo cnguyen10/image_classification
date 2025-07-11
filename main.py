@@ -184,7 +184,8 @@ def main(cfg: DictConfig) -> None:
             num_epochs=cfg.training.num_epochs,
             weight_decay=cfg.training.weight_decay,
             momentum=cfg.training.momentum,
-            clipped_norm=cfg.hparams.clipped_norm
+            clipped_norm=cfg.training.clipped_norm,
+            key=random.randint(a=0, b=100)
         )
     )
 
@@ -302,27 +303,28 @@ def main(cfg: DictConfig) -> None:
                     args=ocp.args.StandardSave(nnx.state(state.model))
                 )
 
-                accuracy_train = evaluate(
-                    data_loader=dataloader_train_1,
-                    optimizer=state,
-                    num_samples=cfg.dataset.length.train,
-                    batch_size=cfg.training.batch_size,
-                    progress_bar_flag=cfg.data_loading.progress_bar
-                )
+                if (epoch_id + 1) % cfg.training.eval_every_n_epochs == 0:
+                    accuracy_train = evaluate(
+                        data_loader=dataloader_train_1,
+                        optimizer=state,
+                        num_samples=cfg.dataset.length.train,
+                        batch_size=cfg.training.batch_size,
+                        progress_bar_flag=cfg.data_loading.progress_bar
+                    )
 
-                accuracy = evaluate(
-                    data_loader=dataloader_test,
-                    optimizer=state,
-                    num_samples=cfg.dataset.length.test,
-                    batch_size=cfg.training.batch_size,
-                    progress_bar_flag=cfg.data_loading.progress_bar
-                )
+                    accuracy = evaluate(
+                        data_loader=dataloader_test,
+                        optimizer=state,
+                        num_samples=cfg.dataset.length.test,
+                        batch_size=cfg.training.batch_size,
+                        progress_bar_flag=cfg.data_loading.progress_bar
+                    )
 
-                mlflow.log_metrics(
-                    metrics={'loss': loss, 'accuracy/test': accuracy, 'accuracy/train': accuracy_train},
-                    step=epoch_id + 1,
-                    synchronous=False
-                )
+                    mlflow.log_metrics(
+                        metrics={'loss': loss, 'accuracy/test': accuracy, 'accuracy/train': accuracy_train},
+                        step=epoch_id + 1,
+                        synchronous=False
+                    )
 
     return None
 
