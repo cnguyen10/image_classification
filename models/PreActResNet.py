@@ -5,73 +5,14 @@ from flax import nnx
 from typing import Sequence
 
 
-class BasicBlock(nnx.Module):
-    def __init__(
-            self,
-            rngs: nnx.Rngs,
-            in_planes: int,
-            planes: int,
-            stride: int = 1,
-            expansion: int = 1,
-            dtype: jnp.dtype = jnp.float32) -> None:
-        super().__init__()
-        self.expansion = expansion
-
-        if stride != 1 or in_planes != (expansion * planes):
-            self.shortcut = nnx.Conv(
-                in_features=in_planes,
-                out_features=expansion * self.planes,
-                kernel_size=(1, 1),
-                strides=stride,
-                use_bias=False,
-                dtype=dtype,
-                rngs=rngs
-            )
-        else:
-            self.shortcut = lambda x: x
-        
-        self.conv1 = nnx.Conv(
-            in_features=in_planes,
-            out_features=planes,
-            kernel_size=(3, 3),
-            strides=stride,
-            padding=1,
-            use_bias=False,
-            dtype=dtype,
-            rngs=rngs
-        )
-        self.bn1 = nnx.BatchNorm(num_features=planes, rngs=rngs)
-        
-        self.conv2 = nnx.Conv(
-            in_features=planes,
-            out_features=planes,
-            kernel_size=(3, 3),
-            strides=1,
-            padding=1,
-            use_bias=False,
-            dtype=dtype,
-            rngs=rngs
-        )
-        self.bn2 = nnx.BatchNorm(num_features=planes, rngs=rngs)
-
-
-    def __call__(self, x: jax.Array) -> jax.Array:
-        out = self.conv1(inputs=x)
-        out = self.bn1(x=out)
-        out = nnx.relu(x=out)
-
-        out = self.conv2(inputs=out)
-        out = self.bn2(x=out)
-        out = out + self.shortcut(x)
-        out = nnx.relu(x=out)
-
-        return out
-
-
 class PreActBlock(nnx.Module):
+    """Implement the pre-activated residual neural networks in the paper:
+    'Identity Mappings in Deep Residual Networks' (ECCV 2016)
+    """
     def __init__(
             self,
             rngs: nnx.Rngs,
+            dropout_rate: float,
             in_planes: int,
             planes: int,
             stride: int = 1,
@@ -116,18 +57,23 @@ class PreActBlock(nnx.Module):
             )
         else:
             self.shortcut = lambda x: x
+        
+        self.dropout = nnx.Dropout(rate=dropout_rate, broadcast_dims=(1, 2), rngs=rngs)
 
 
     def __call__(self, x: jax.Array) -> jax.Array:
         out = self.bn1(x=x)
         out = nnx.relu(x=out)
 
-        shortcut = self.shortcut(out)
+        shortcut = self.shortcut(x)
 
         out = self.conv1(inputs=out)
 
         out = self.bn2(x=out)
         out = nnx.relu(x=out)
+
+        out = self.dropout(out)
+
         out = self.conv2(inputs=out)
 
         return out + shortcut
@@ -238,19 +184,21 @@ class PreActResNet(nnx.Module):
 
         planes = [64, 128, 256, 512]
         self.layers = [None] * len(num_blocks)
-        self.dropouts = [None] * len(self.layers)
         for i in range(len(num_blocks)):
             in_planes, self.layers[i] = make_layer(
-                rngs=rngs,
                 block=block,
                 in_planes=in_planes,
                 planes=planes[i],
                 num_blocks=num_blocks[i],
                 stride=min(i + 1, 2),
+                rngs=rngs,
+                dropout_rate=dropout_rate,
                 dtype=dtype
             )
 
-            self.dropouts[i] = nnx.Dropout(rate=dropout_rate, rngs=rngs)
+        # dropout of the first conv and the last fully-connected layers
+        self.dropout_conv = nnx.Dropout(rate=dropout_rate, broadcast_dims=(1, 2), rngs=rngs)
+        self.dropout_mlp = nnx.Dropout(rate=dropout_rate, broadcast_dims=(-1,), rngs=rngs)
         
         if num_classes is None:
             self.clf = lambda x: x
@@ -267,11 +215,14 @@ class PreActResNet(nnx.Module):
         out = self.bn1(x=out)
         out = nnx.relu(x=out)
 
+        out = self.dropout_conv(out)
+
         for i in range(len(self.layers)):
             out = self.layers[i](out)
-            out = self.dropouts[i](out)
 
         out = jnp.mean(a=out, axis=(1, 2))
+
+        out = self.dropout_mlp(out)
 
         out = self.clf(out)
 
@@ -296,6 +247,7 @@ def make_layer(
         num_blocks: Sequence[int],
         stride: int,
         rngs: nnx.Rngs,
+        dropout_rate: float,
         dtype: jnp.dtype = jnp.float32) -> tuple[int, nnx.Module]:
     """
     """
@@ -304,6 +256,7 @@ def make_layer(
     for stride in strides:
         block_layer = block(
             rngs=rngs,
+            dropout_rate=dropout_rate,
             in_planes=in_planes,
             planes=planes,
             stride=stride,
