@@ -37,17 +37,23 @@ training:
   num_epochs: 300
   momentum: 0.9
   weight_decay: 0.0005
-  dropout_rate: 0.
+  dropout_rate: 0.1
   clipped_norm: 10
   eval_every_n_epochs: 10
 
-hparams:
+data_augmentation:
   resize: null
   padding_px: 4
   crop_size: [32, 32]
   prob_random_flip: 0.5
   mean: null
   std: null
+
+mixup:
+  enable: True
+  beta:
+    a: 0.1
+    b: 0.1
 
 jax:
   platform: cuda

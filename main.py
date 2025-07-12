@@ -28,6 +28,7 @@ from utils import (
     init_tx,
     initialize_dataloader
 )
+from mixup import mixup_data
 
 
 @nnx.jit
@@ -36,7 +37,7 @@ def cross_entropy_loss(model: nnx.Module, x: jax.Array, y: jax.Array) -> jax.Arr
     """
     logits = model(x)
 
-    loss = optax.losses.softmax_cross_entropy_with_integer_labels(
+    loss = optax.losses.softmax_cross_entropy(
         logits=logits,
         labels=y
     )
@@ -62,7 +63,7 @@ def train(
     data_loader: grain.DatasetIterator,
     optimizer: nnx.Optimizer,
     cfg: DictConfig
-) -> tuple[nnx.Optimizer, float]:
+) -> tuple[nnx.Optimizer, jax.Array]:
     """
     """
     # metric to track the training loss
@@ -85,7 +86,15 @@ def train(
         x = jnp.array(object=samples['image'], dtype=jnp.float32)
         y = jnp.array(object=samples['label'], dtype=jnp.int32)
 
+        # convert labels to one-hot vectors
+        y = jax.nn.one_hot(x=y, num_classes=cfg.dataset.num_classes)
+
+        if cfg.mixup.enable:
+            key = jax.random.PRNGKey(seed=optimizer.step.value)
+            x, y = mixup_data(x, y, key, cfg.mixup.beta.a, cfg.mixup.beta.b)
+
         optimizer, loss = train_step(x=x, y=y, optimizer=optimizer)
+            
 
         if jnp.isnan(loss):
             raise ValueError('Training loss is NaN.')
@@ -101,7 +110,7 @@ def evaluate(
     num_samples: int,
     batch_size: int,
     progress_bar_flag: bool
-) -> float:
+) -> jax.Array:
     """
     """
     # metrics for tracking
@@ -249,12 +258,12 @@ def main(cfg: DictConfig) -> None:
                 shuffle=True,
                 seed=random.randint(a=0, b=255),
                 batch_size=cfg.training.batch_size,
-                resize=cfg.hparams.resize,
-                padding_px=cfg.hparams.padding_px,
-                crop_size=cfg.hparams.crop_size,
-                mean=cfg.hparams.mean,
-                std=cfg.hparams.std,
-                p_flip=cfg.hparams.prob_random_flip,
+                resize=cfg.data_augmentation.resize,
+                padding_px=cfg.data_augmentation.padding_px,
+                crop_size=cfg.data_augmentation.crop_size,
+                mean=cfg.data_augmentation.mean,
+                std=cfg.data_augmentation.std,
+                p_flip=cfg.data_augmentation.prob_random_flip,
                 num_workers=cfg.data_loading.num_workers,
                 num_threads=cfg.data_loading.num_threads,
                 prefetch_size=cfg.data_loading.prefetch_size
@@ -267,11 +276,11 @@ def main(cfg: DictConfig) -> None:
                 shuffle=False,
                 seed=0,
                 batch_size=cfg.training.batch_size,
-                resize=cfg.hparams.crop_size,
+                resize=cfg.data_augmentation.crop_size,
                 padding_px=None,
                 crop_size=None,
-                mean=cfg.hparams.mean,
-                std=cfg.hparams.std,
+                mean=cfg.data_augmentation.mean,
+                std=cfg.data_augmentation.std,
                 p_flip=None,
                 is_color_img=True,
                 num_workers=cfg.data_loading.num_workers,
