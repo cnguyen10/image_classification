@@ -1,4 +1,6 @@
 defaults:
+  - cifar100
+  # - chaoyang
   - override hydra/hydra_logging: disabled  
   - override hydra/job_logging: disabled
   - _self_
@@ -14,17 +16,6 @@ experiment:
   logdir: ./logdir
   run_id: null
 
-dataset:
-  name: cifar100
-  num_classes: 100
-  root: /sda2/datasets/cifar100/ciFAIR-100
-  train_file: ${dataset.root}/train.json
-  test_file: ${dataset.root}/test.json
-
-model:
-  _partial_: True
-  _target_: models.PreActResNet.ResNet18
-
 data_loading:
   num_workers: 8
   num_threads: 4
@@ -32,22 +23,10 @@ data_loading:
   progress_bar: True
 
 training:
-  lr: 0.01
-  batch_size: 128
-  num_epochs: 300
   momentum: 0.9
   weight_decay: 0.0005
   dropout_rate: 0.1
-  clipped_norm: 10
   eval_every_n_epochs: 10
-
-data_augmentation:
-  resize: null
-  padding_px: 4
-  crop_size: [32, 32]
-  prob_random_flip: 0.5
-  mean: null
-  std: null
 
 mixup:
   enable: True
@@ -57,6 +36,6 @@ mixup:
 
 jax:
   platform: cuda
-  mem: 0.25
+  mem: 0.25  # percentage of VRAM in GPU will be allocated
   disable_jit: False
   dtype: jnp.bfloat16

@@ -141,7 +141,7 @@ def evaluate(
     return acc_accum.compute()
 
 
-@hydra.main(version_base=None, config_path=".", config_name="conf")
+@hydra.main(version_base=None, config_path='conf', config_name='conf')
 def main(cfg: DictConfig) -> None:
     """main procedure
     """
@@ -223,7 +223,12 @@ def main(cfg: DictConfig) -> None:
 
     with mlflow.start_run(run_id=cfg.experiment.run_id, log_system_metrics=False) as mlflow_run:
         # append run id into the artifact path
-        ckpt_dir = os.path.join(os.getcwd(), cfg.experiment.logdir, cfg.experiment.name, mlflow_run.info.run_id)
+        ckpt_dir = os.path.join(
+            os.getcwd(),
+            cfg.experiment.logdir,
+            cfg.experiment.name,
+            mlflow_run.info.run_id
+        )
 
         # enable an orbax checkpoint manager to save model's parameters
         with ocp.CheckpointManager(directory=ckpt_dir, options=ckpt_options) as ckpt_mngr:
@@ -336,7 +341,11 @@ def main(cfg: DictConfig) -> None:
                     )
 
                     mlflow.log_metrics(
-                        metrics={'loss': loss, 'accuracy/test': accuracy, 'accuracy/train': accuracy_train},
+                        metrics={
+                            'loss': loss,
+                            'accuracy/test': accuracy,
+                            'accuracy/train': accuracy_train
+                        },
                         step=epoch_id + 1,
                         synchronous=False
                     )

@@ -1,0 +1,29 @@
+dataset:
+  name: chaoyang
+  num_classes: 4
+  root: /sda2/datasets/chaoyang
+  train_file: ${dataset.root}/annotations_3/train.json
+  test_file: ${dataset.root}/annotations_3/test.json
+
+model:
+  _partial_: True
+  _target_: models.ResNet.ResNet18
+  in_channels: 3
+  conv1_kernel_size: [7, 7]
+
+data_augmentation:
+  resize: [256, 256]
+  padding_px: null
+  crop_size: [224, 224]
+  prob_random_flip: 0.5
+  mean: null
+  std: null
+
+training:
+  lr: 0.01
+  batch_size: 128
+  num_epochs: 300
+  clipped_norm: null
+
+jax:
+  mem: 0.5

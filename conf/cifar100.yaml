@@ -1,0 +1,26 @@
+dataset:
+  name: cifar100
+  num_classes: 100
+  root: /sda2/datasets/cifar100/ciFAIR-100
+  train_file: ${dataset.root}/train.json
+  test_file: ${dataset.root}/test.json
+
+model:
+  _partial_: True
+  _target_: models.ResNet.PreActResNet18
+  in_channels: 3  # color images: 3, black and white: 1
+  conv1_kernel_size: [3, 3]
+
+data_augmentation:
+  resize: null
+  padding_px: 4
+  crop_size: [32, 32]
+  prob_random_flip: 0.5
+  mean: null
+  std: null
+
+training:
+  lr: 0.01
+  batch_size: 128
+  num_epochs: 300
+  clipped_norm: 10
