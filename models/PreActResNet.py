@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from typing import Sequence
+from collections.abc import Sequence, Callable
 
 
 class PreActBlock(nnx.Module):
@@ -91,7 +91,7 @@ class PreActBottleneck(nnx.Module):
         super().__init__()
         self.expansion = expansion
 
-        if self.stride != 1 or self.in_planes != self.expansion * self.planes:
+        if stride != 1 or in_planes != self.expansion * planes:
             self.shortcut = nnx.Conv(
                 in_features=in_planes,
                 out_features=expansion * planes,
@@ -163,10 +163,10 @@ class PreActResNet(nnx.Module):
             self,
             rngs: nnx.Rngs,
             dropout_rate: float,
-            block: PreActBlock | PreActBottleneck,
+            block: Callable[..., PreActBlock | PreActBottleneck],
             num_blocks: Sequence[int],
             in_planes: int = 64,
-            num_classes: int = None,
+            num_classes: int | None = None,
             dtype: jnp.dtype = jnp.float32) -> None:
         super().__init__()
 
@@ -183,9 +183,9 @@ class PreActResNet(nnx.Module):
         self.bn1 = nnx.BatchNorm(num_features=in_planes, rngs=rngs)
 
         planes = [64, 128, 256, 512]
-        self.layers = [None] * len(num_blocks)
+        self.layers = []
         for i in range(len(num_blocks)):
-            in_planes, self.layers[i] = make_layer(
+            in_planes, layer_temp = make_layer(
                 block=block,
                 in_planes=in_planes,
                 planes=planes[i],
@@ -195,6 +195,7 @@ class PreActResNet(nnx.Module):
                 dropout_rate=dropout_rate,
                 dtype=dtype
             )
+            self.layers.append(layer_temp)
 
         # dropout of the first conv and the last fully-connected layers
         self.dropout_conv = nnx.Dropout(rate=dropout_rate, broadcast_dims=(1, 2), rngs=rngs)
@@ -229,7 +230,7 @@ class PreActResNet(nnx.Module):
         return out
 
 
-def ResNet18(num_classes: int, rngs: nnx.Rngs, dropout_rate: float, dtype: jnp.dtype = jnp.float32) -> PreActResNet:
+def PreActResNet18(num_classes: int, rngs: nnx.Rngs, dropout_rate: float, dtype: jnp.dtype = jnp.float32) -> PreActResNet:
     return PreActResNet(
         rngs=rngs,
         dropout_rate=dropout_rate,
@@ -241,10 +242,10 @@ def ResNet18(num_classes: int, rngs: nnx.Rngs, dropout_rate: float, dtype: jnp.d
 
 
 def make_layer(
-        block: PreActBlock | PreActBottleneck,
+        block: Callable[..., PreActBlock | PreActBottleneck],
         in_planes: int,
         planes: int,
-        num_blocks: Sequence[int],
+        num_blocks: int,
         stride: int,
         rngs: nnx.Rngs,
         dropout_rate: float,
