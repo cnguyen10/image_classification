@@ -83,7 +83,7 @@ def train(
     ):
         samples = next(data_loader)
 
-        x = jnp.array(object=samples['image'], dtype=jnp.float32)
+        x = jnp.array(object=samples['image'], dtype=eval(cfg.jax.dtype))
         y = jnp.array(object=samples['label'], dtype=jnp.int32)
 
         # convert labels to one-hot vectors
@@ -91,7 +91,8 @@ def train(
 
         if cfg.mixup.enable:
             key = jax.random.PRNGKey(seed=optimizer.step.value)
-            x, y = mixup_data(x, y, key, cfg.mixup.beta.a, cfg.mixup.beta.b)
+            x_mixed, y = mixup_data(x, y, key, cfg.mixup.beta.a, cfg.mixup.beta.b)
+            x = jnp.astype(x_mixed, x.dtype)
 
         optimizer, loss = train_step(x=x, y=y, optimizer=optimizer)
             
@@ -109,7 +110,8 @@ def evaluate(
     optimizer: nnx.Optimizer,
     num_samples: int,
     batch_size: int,
-    progress_bar_flag: bool
+    progress_bar_flag: bool,
+    dtype: jax.typing.DTypeLike = jnp.float32
 ) -> jax.Array:
     """
     """
@@ -129,7 +131,7 @@ def evaluate(
         colour='blue',
         disable=not progress_bar_flag
     ):
-        x = jnp.array(object=samples['image'], dtype=jnp.float32)
+        x = jnp.array(object=samples['image'], dtype=dtype)
         y = jnp.array(object=samples['label'], dtype=jnp.int32)
 
         logits = optimizer.model(x)
@@ -320,7 +322,8 @@ def main(cfg: DictConfig) -> None:
                         optimizer=state,
                         num_samples=cfg.dataset.length.train,
                         batch_size=cfg.training.batch_size,
-                        progress_bar_flag=cfg.data_loading.progress_bar
+                        progress_bar_flag=cfg.data_loading.progress_bar,
+                        dtype=eval(cfg.jax.dtype)
                     )
 
                     accuracy = evaluate(
@@ -328,7 +331,8 @@ def main(cfg: DictConfig) -> None:
                         optimizer=state,
                         num_samples=cfg.dataset.length.test,
                         batch_size=cfg.training.batch_size,
-                        progress_bar_flag=cfg.data_loading.progress_bar
+                        progress_bar_flag=cfg.data_loading.progress_bar,
+                        dtype=eval(cfg.jax.dtype)
                     )
 
                     mlflow.log_metrics(
