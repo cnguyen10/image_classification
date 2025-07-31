@@ -397,8 +397,7 @@ class ResNet(nnx.Module):
         self.dropout_conv = nnx.Dropout(rate=dropout_rate, broadcast_dims=(1, 2), rngs=rngs)
         self.dropout_mlp = nnx.Dropout(rate=dropout_rate, broadcast_dims=(-1,), rngs=rngs)
 
-
-    def __call__(self, x: jax.Array) -> jax.Array:
+    def get_features(self, x: jax.Array) -> jax.Array:
         out = self.conv1(inputs=x)
         out = self.bn1(x=out)
         out = nnx.relu(x=out)
@@ -410,6 +409,12 @@ class ResNet(nnx.Module):
             out = self.layers[i](out)
 
         out = jnp.mean(a=out, axis=(1, 2))
+
+        return out
+
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        out = self.get_features(x=x)
 
         out = self.dropout_mlp(out)
 
@@ -473,8 +478,7 @@ class PreActResNet(nnx.Module):
                 rngs=rngs
             )
 
-
-    def __call__(self, x: jax.Array) -> jax.Array:
+    def get_features(self, x: jax.Array) -> jax.Array:
         out = self.conv1(inputs=x)
 
         out = self.dropout_conv(out)
@@ -483,6 +487,11 @@ class PreActResNet(nnx.Module):
             out = self.layers[i](out)
 
         out = jnp.mean(a=out, axis=(1, 2))
+
+        return out
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        out = self.get_features(x=x)
 
         out = self.dropout_mlp(out)
 
