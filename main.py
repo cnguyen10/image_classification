@@ -59,7 +59,7 @@ def train_step(
     grad_value_fn = nnx.value_and_grad(f=cross_entropy_loss, argnums=0)
     loss, grads = grad_value_fn(model, x, y)
 
-    optimizer.update(grads=grads)
+    optimizer.update(model=model, grads=grads)
 
     return (model, optimizer, loss)
 
@@ -202,13 +202,14 @@ def main(cfg: DictConfig) -> None:
             momentum=cfg.training.momentum,
             clipped_norm=cfg.training.clipped_norm,
             key=random.randint(a=0, b=100)
-        )
+        ),
+        wrt=nnx.Param
     )
     # endregion
 
     # options to store models
     ckpt_options = ocp.CheckpointManagerOptions(
-        save_interval_steps=50,
+        save_interval_steps=10,
         max_to_keep=10,
         step_format_fixed_length=3,
         enable_async_checkpointing=True
@@ -224,41 +225,40 @@ def main(cfg: DictConfig) -> None:
     if not os.path.exists(path=cfg.experiment.logdir):
         Path(cfg.experiment.logdir).mkdir(parents=True, exist_ok=True)
 
-    with mlflow.start_run(run_id=cfg.experiment.run_id, log_system_metrics=False) as mlflow_run:
-        # append run id into the artifact path
-        ckpt_dir = os.path.join(
-            os.getcwd(),
-            cfg.experiment.logdir,
-            cfg.experiment.name,
-            mlflow_run.info.run_id
-        )
+    with mlflow.start_run(run_id=cfg.experiment.run_id, log_system_metrics=False) as mlflow_run, \
+        ocp.CheckpointManager(
+            directory=os.path.join(
+                os.getcwd(),
+                cfg.experiment.logdir,
+                cfg.experiment.name,
+                mlflow_run.info.run_id
+            ),
+            options=ckpt_options) as ckpt_mngr:
 
-        # enable an orbax checkpoint manager to load model's parameters
-        with ocp.CheckpointManager(directory=ckpt_dir, options=ckpt_options) as ckpt_mngr:
-            if cfg.experiment.run_id is None:
-                start_epoch_id = 0
+        if cfg.experiment.run_id is None:
+            start_epoch_id = 0
 
-                # log hyper-parameters
-                mlflow.log_params(
-                    params=flatten_dict(xs=OmegaConf.to_container(cfg=cfg), sep='.')
-                )
+            # log hyper-parameters
+            mlflow.log_params(
+                params=flatten_dict(xs=OmegaConf.to_container(cfg=cfg), sep='.')
+            )
 
-                # log source code
-                mlflow.log_artifact(
-                    local_path=os.path.abspath(path=__file__),
-                    artifact_path='source_code'
-                )
-            else:
-                start_epoch_id = ckpt_mngr.latest_step()
+            # log source code
+            mlflow.log_artifact(
+                local_path=os.path.abspath(path=__file__),
+                artifact_path='source_code'
+            )
+        else:
+            start_epoch_id = ckpt_mngr.latest_step()
 
-                checkpoint = ckpt_mngr.restore(
-                    step=start_epoch_id,
-                    args=ocp.args.StandardRestore(item=nnx.state(model))
-                )
+            checkpoint = ckpt_mngr.restore(
+                step=start_epoch_id,
+                args=ocp.args.StandardRestore(item=nnx.state(model))
+            )
 
-                nnx.update(model, checkpoint)
+            nnx.update(model, checkpoint)
 
-                del checkpoint
+            del checkpoint
 
         # create iterative datasets as data loaders
         dataloader_train = initialize_dataloader(
@@ -350,15 +350,15 @@ def main(cfg: DictConfig) -> None:
                     synchronous=False
                 )
 
-            with ocp.CheckpointManager(directory=ckpt_dir, options=ckpt_options) as ckpt_mngr:
-                # save parameters asynchronously
-                ckpt_mngr.save(
-                    step=epoch_id + 1,
-                    args=ocp.args.StandardSave(nnx.state(model))
-                )
+            # wait for checkpoint manager completing the asynchronous saving
+            # before saving another checkpoint
+            ckpt_mngr.wait_until_finished()
 
-                # wait for checkpoint manager completing the asynchronous saving
-                ckpt_mngr.wait_until_finished()
+            # save parameters asynchronously
+            ckpt_mngr.save(
+                step=epoch_id + 1,
+                args=ocp.args.StandardSave(nnx.state(model))
+            )
 
     return None
 
